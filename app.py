@@ -196,12 +196,20 @@ def compute_recommendation(ticker):
 
         expected_move = str(round(straddle / underlying_price * 100,2)) + "%" if straddle else None
 
-        # Legacy return: booleans + expected_move
+        # --- Added raw value dictionary ---
+        raw_values = {
+            'avg_volume_raw': avg_volume,
+            'iv30_rv30_raw': iv30_rv30,
+            'ts_slope_0_45_raw': ts_slope_0_45
+        }
+
+        # Legacy return: booleans + expected_move + raw values
         return {
             'avg_volume': avg_volume >= 1500000,
             'iv30_rv30': iv30_rv30 >= 1.25,
             'ts_slope_0_45': ts_slope_0_45 <= -0.00406,
-            'expected_move': expected_move
+            'expected_move': expected_move,
+            **raw_values
         }
     except Exception:
         # Keep legacy behavior: generic error on exception
@@ -244,7 +252,13 @@ if run:
             st.write(f"iv30_rv30: {'PASS' if iv30_rv30_bool else 'FAIL'}")
             st.write(f"ts_slope_0_45: {'PASS' if ts_slope_bool else 'FAIL'}")
             st.write(f"Expected Move: {expected_move}")
+
+            # --- Added raw value printout ---
+            st.markdown("---")
+            st.subheader("Raw Values for Verification")
+            st.write(f"Average Volume (Raw): {result.get('avg_volume_raw', 'N/A'):,}")
+            st.write(f"IV30/RV30 (Raw): {result.get('iv30_rv30_raw', 'N/A'):.4f}")
+            st.write(f"Term Structure Slope 0-45 (Raw): {result.get('ts_slope_0_45_raw', 'N/A'):.6f}")
+
     except Exception as e:
         st.error(str(e))
-
-
