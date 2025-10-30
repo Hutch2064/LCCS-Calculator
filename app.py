@@ -30,22 +30,14 @@ if run_button:
         df = pd.DataFrame(results)
 
         # Replace boolean True/False with PASS/FAIL strings
-        for col in ["avg_volume", "iv30_rv30", "ts_slope_0_45"]:
+        for col in ["Average_Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days]:
             if col in df.columns:
                 df[col] = df[col].map({True: "✅ PASS", False: "❌ FAIL"})
 
         st.subheader("Results")
 
-        # Style the DataFrame: center text, color pass/fail
-        def highlight_pass_fail(val):
-            if isinstance(val, str) and "PASS" in val:
-                return "background-color: #d1ffd6"  # light green
-            elif isinstance(val, str) and "FAIL" in val:
-                return "background-color: #ffd6d6"  # light red
-            return ""
-
-        styled_df = df.style.applymap(highlight_pass_fail)
-        st.dataframe(styled_df, use_container_width=True)
+        # Show a clean DataFrame without row index
+        st.dataframe(df.reset_index(drop=True), use_container_width=True)
 
         # Allow download as CSV
         csv = df.to_csv(index=False).encode("utf-8")
@@ -58,5 +50,6 @@ if run_button:
 
 else:
     st.info("Enter tickers above and click **Run Analysis**.")
+
 
 
