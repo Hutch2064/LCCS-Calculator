@@ -11,10 +11,10 @@ import numpy as np
 import pandas as pd
 import traceback
 
+# ---------------------------
+# Helper functions (verbatim)
+# ---------------------------
 
-# ----------------------------------------------------------
-# Helper Functions
-# ----------------------------------------------------------
 def filter_dates(dates):
     today = datetime.today().date()
     cutoff_date = today + timedelta(days=45)
@@ -23,7 +23,7 @@ def filter_dates(dates):
     arr = []
     for i, date in enumerate(sorted_dates):
         if date >= cutoff_date:
-            arr = [d.strftime("%Y-%m-%d") for d in sorted_dates[:i + 1]]
+            arr = [d.strftime("%Y-%m-%d") for d in sorted_dates[:i+1]]
             break
 
     if len(arr) > 0:
@@ -35,33 +35,51 @@ def filter_dates(dates):
 
 
 def yang_zhang(price_data, window=30, trading_periods=252, return_last_only=True):
-    log_ho = (price_data["High"] / price_data["Open"]).apply(np.log)
-    log_lo = (price_data["Low"] / price_data["Open"]).apply(np.log)
-    log_co = (price_data["Close"] / price_data["Open"]).apply(np.log)
+    log_ho = (price_data['High'] / price_data['Open']).apply(np.log)
+    log_lo = (price_data['Low'] / price_data['Open']).apply(np.log)
+    log_co = (price_data['Close'] / price_data['Open']).apply(np.log)
 
-    log_oc = (price_data["Open"] / price_data["Close"].shift(1)).apply(np.log)
-    log_oc_sq = log_oc ** 2
-    log_cc = (price_data["Close"] / price_data["Close"].shift(1)).apply(np.log)
-    log_cc_sq = log_cc ** 2
+    log_oc = (price_data['Open'] / price_data['Close'].shift(1)).apply(np.log)
+    log_oc_sq = log_oc**2
+
+    log_cc = (price_data['Close'] / price_data['Close'].shift(1)).apply(np.log)
+    log_cc_sq = log_cc**2
+
     rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
 
-    close_vol = log_cc_sq.rolling(window=window, center=False).sum() * (1.0 / (window - 1.0))
-    open_vol = log_oc_sq.rolling(window=window, center=False).sum() * (1.0 / (window - 1.0))
-    window_rs = rs.rolling(window=window, center=False).sum() * (1.0 / (window - 1.0))
+    close_vol = log_cc_sq.rolling(
+        window=window,
+        center=False
+    ).sum() * (1.0 / (window - 1.0))
 
-    k = 0.34 / (1.34 + ((window + 1) / (window - 1)))
+    open_vol = log_oc_sq.rolling(
+        window=window,
+        center=False
+    ).sum() * (1.0 / (window - 1.0))
+
+    window_rs = rs.rolling(
+        window=window,
+        center=False
+    ).sum() * (1.0 / (window - 1.0))
+
+    k = 0.34 / (1.34 + ((window + 1) / (window - 1)) )
     result = (open_vol + k * close_vol + (1 - k) * window_rs).apply(np.sqrt) * np.sqrt(trading_periods)
 
-    return result.iloc[-1] if return_last_only else result.dropna()
+    if return_last_only:
+        return result.iloc[-1]
+    else:
+        return result.dropna()
 
 
 def build_term_structure(days, ivs):
     days = np.array(days)
     ivs = np.array(ivs)
+
     sort_idx = days.argsort()
     days = days[sort_idx]
     ivs = ivs[sort_idx]
-    spline = interp1d(days, ivs, kind="linear", fill_value="extrapolate")
+
+    spline = interp1d(days, ivs, kind='linear', fill_value="extrapolate")
 
     def term_spline(dte):
         if dte < days[0]:
@@ -75,25 +93,28 @@ def build_term_structure(days, ivs):
 
 
 def get_current_price(ticker):
-    todays_data = ticker.history(period="1d")
-    return todays_data["Close"][0]
+    todays_data = ticker.history(period='1d')
+    return todays_data['Close'][0]
 
 
 def compute_recommendation(ticker):
     try:
         ticker = ticker.strip().upper()
         if not ticker:
-            return {"Ticker": ticker, "Error": "No stock symbol provided."}
+            return "No stock symbol provided."
 
-        stock = yf.Ticker(ticker)
-        if len(stock.options) == 0:
-            return {"Ticker": ticker, "Error": f"No options found for {ticker}."}
+        try:
+            stock = yf.Ticker(ticker)
+            if len(stock.options) == 0:
+                raise KeyError()
+        except KeyError:
+            return f"Error: No options found for stock symbol '{ticker}'."
 
         exp_dates = list(stock.options)
         try:
             exp_dates = filter_dates(exp_dates)
-        except Exception:
-            return {"Ticker": ticker, "Error": "Not enough option data."}
+        except:
+            return "Error: Not enough option data."
 
         options_chains = {}
         for exp_date in exp_dates:
@@ -104,7 +125,7 @@ def compute_recommendation(ticker):
             if underlying_price is None:
                 raise ValueError("No market price found.")
         except Exception:
-            return {"Ticker": ticker, "Error": "Unable to retrieve stock price."}
+            return "Error: Unable to retrieve underlying stock price."
 
         atm_iv = {}
         straddle = None
@@ -116,22 +137,22 @@ def compute_recommendation(ticker):
             if calls.empty or puts.empty:
                 continue
 
-            call_diffs = (calls["strike"] - underlying_price).abs()
+            call_diffs = (calls['strike'] - underlying_price).abs()
             call_idx = call_diffs.idxmin()
-            call_iv = calls.loc[call_idx, "impliedVolatility"]
+            call_iv = calls.loc[call_idx, 'impliedVolatility']
 
-            put_diffs = (puts["strike"] - underlying_price).abs()
+            put_diffs = (puts['strike'] - underlying_price).abs()
             put_idx = put_diffs.idxmin()
-            put_iv = puts.loc[put_idx, "impliedVolatility"]
+            put_iv = puts.loc[put_idx, 'impliedVolatility']
 
             atm_iv_value = (call_iv + put_iv) / 2.0
             atm_iv[exp_date] = atm_iv_value
 
             if i == 0:
-                call_bid = calls.loc[call_idx, "bid"]
-                call_ask = calls.loc[call_idx, "ask"]
-                put_bid = puts.loc[put_idx, "bid"]
-                put_ask = puts.loc[put_idx, "ask"]
+                call_bid = calls.loc[call_idx, 'bid']
+                call_ask = calls.loc[call_idx, 'ask']
+                put_bid = puts.loc[put_idx, 'bid']
+                put_ask = puts.loc[put_idx, 'ask']
 
                 if call_bid is not None and call_ask is not None:
                     call_mid = (call_bid + call_ask) / 2.0
@@ -144,12 +165,12 @@ def compute_recommendation(ticker):
                     put_mid = None
 
                 if call_mid is not None and put_mid is not None:
-                    straddle = call_mid + put_mid
+                    straddle = (call_mid + put_mid)
 
             i += 1
 
         if not atm_iv:
-            return {"Ticker": ticker, "Error": "Could not determine ATM IV for any expiration dates."}
+            return "Error: Could not determine ATM IV for any expiration dates."
 
         today = datetime.today().date()
         dtes = []
@@ -161,54 +182,63 @@ def compute_recommendation(ticker):
             ivs.append(iv)
 
         term_spline = build_term_structure(dtes, ivs)
-        ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45 - dtes[0])
 
-        price_history = stock.history(period="3mo")
+        ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45-dtes[0])
+
+        price_history = stock.history(period='3mo')
         iv30_rv30 = term_spline(30) / yang_zhang(price_history)
-        avg_volume = price_history["Volume"].rolling(30).mean().dropna().iloc[-1]
-        expected_move = str(round(straddle / underlying_price * 100, 2)) + "%" if straddle else None
 
+        avg_volume = price_history['Volume'].rolling(30).mean().dropna().iloc[-1]
+
+        expected_move = str(round(straddle / underlying_price * 100,2)) + "%" if straddle else None
+
+        # Legacy return: booleans + expected_move
         return {
-            "Ticker": ticker,
-            "Average Volume": f"{'PASS' if avg_volume >= 1_500_000 else 'FAIL'} ({round(avg_volume, 2):,.0f})",
-            "IV30/RV30": f"{'PASS' if iv30_rv30 >= 1.25 else 'FAIL'} ({iv30_rv30:.2f})",
-            "Term Structure Slope 0–45": f"{'PASS' if ts_slope_0_45 <= -0.00406 else 'FAIL'} ({ts_slope_0_45:.5f})",
-            "Expected Move": expected_move,
+            'avg_volume': avg_volume >= 1500000,
+            'iv30_rv30': iv30_rv30 >= 1.25,
+            'ts_slope_0_45': ts_slope_0_45 <= -0.00406,
+            'expected_move': expected_move
         }
+    except Exception:
+        # Keep legacy behavior: generic error on exception
+        raise Exception('Error occured processing')
 
-    except Exception as e:
-        traceback.print_exc()
-        return {"Ticker": ticker, "Error": str(e)}
 
-
-# ----------------------------------------------------------
-# Streamlit UI
-# ----------------------------------------------------------
+# ---------------------------
+# Streamlit UI (thin shell)
+# ---------------------------
 st.set_page_config(page_title="Earnings Position Checker", page_icon="📈", layout="wide")
-st.title("📈 Earnings Position Checker (Streamlit Version)")
+st.title("📈 Earnings Position Checker (Streamlit)")
 
-tickers_text = st.text_area("Enter one or more stock tickers (comma separated):", "AAPL, MSFT, NVDA", height=100)
-run_button = st.button("Run Analysis", type="primary")
+ticker = st.text_input("Enter Stock Symbol:", "AAPL")
+run = st.button("Submit")
 
-if run_button:
-    tickers = [t.strip().upper() for t in tickers_text.split(",") if t.strip()]
-    if not tickers:
-        st.warning("Please enter at least one ticker.")
-    else:
-        st.info("Fetching data... please wait ⏳")
+if run:
+    try:
+        result = compute_recommendation(ticker)
+        if isinstance(result, str):
+            st.error(result)
+        else:
+            avg_volume_bool = result['avg_volume']
+            iv30_rv30_bool = result['iv30_rv30']
+            ts_slope_bool = result['ts_slope_0_45']
+            expected_move = result['expected_move']
 
-        results = [compute_recommendation(t) for t in tickers]
-        df = pd.DataFrame(results)
+            # Legacy decision logic
+            if avg_volume_bool and iv30_rv30_bool and ts_slope_bool:
+                title = "Recommended"
+                title_color = "green"
+            elif ts_slope_bool and ((avg_volume_bool and not iv30_rv30_bool) or (iv30_rv30_bool and not avg_volume_bool)):
+                title = "Consider"
+                title_color = "orange"
+            else:
+                title = "Avoid"
+                title_color = "red"
 
-        st.subheader("Results")
-        st.dataframe(df, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("Metric Thresholds")
-        st.markdown("""
-        - **Average Volume ≥ 1.5 million shares**
-        - **IV30/RV30 ≥ 1.25**
-        - **Term Structure Slope (0–45 Days) ≤ −0.00406**
-        """)
-else:
-    st.info("Enter tickers above and click **Run Analysis**.")
+            st.markdown(f"### <span style='color:{title_color}'>{title}</span>", unsafe_allow_html=True)
+            st.write(f"avg_volume: {'PASS' if avg_volume_bool else 'FAIL'}")
+            st.write(f"iv30_rv30: {'PASS' if iv30_rv30_bool else 'FAIL'}")
+            st.write(f"ts_slope_0_45: {'PASS' if ts_slope_bool else 'FAIL'}")
+            st.write(f"Expected Move: {expected_move}")
+    except Exception as e:
+        st.error(str(e))
