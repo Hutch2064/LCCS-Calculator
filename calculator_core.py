@@ -1,5 +1,5 @@
 # ==========================================================
-# CORE LOGIC — Verbatim legacy logic with new Streamlit naming
+# CORE LOGIC — Verbatim legacy logic with Streamlit naming
 # ==========================================================
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 import traceback
 import pandas as pd
+
 
 def filter_dates(dates):
     today = datetime.today().date()
@@ -26,33 +27,37 @@ def filter_dates(dates):
 
     raise ValueError("No date 45 days or more in the future found.")
 
-def yang_zhang(price_data, window=30, trading_periods=252, return_last_only=True):
-    log_ho = (price_data['High'] / price_data['Open']).apply(np.log)
-    log_lo = (price_data['Low'] / price_data['Open']).apply(np.log)
-    log_co = (price_data['Close'] / price_data['Open']).apply(np.log)
 
-    log_oc = (price_data['Open'] / price_data['Close'].shift(1)).apply(np.log)
+def yang_zhang(price_data, window=30, trading_periods=252, return_last_only=True):
+    log_ho = (price_data["High"] / price_data["Open"]).apply(np.log)
+    log_lo = (price_data["Low"] / price_data["Open"]).apply(np.log)
+    log_co = (price_data["Close"] / price_data["Open"]).apply(np.log)
+
+    log_oc = (price_data["Open"] / price_data["Close"].shift(1)).apply(np.log)
     log_oc_sq = log_oc**2
-    log_cc = (price_data['Close'] / price_data['Close'].shift(1)).apply(np.log)
+    log_cc = (price_data["Close"] / price_data["Close"].shift(1)).apply(np.log)
     log_cc_sq = log_cc**2
 
     rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
     close_vol = log_cc_sq.rolling(window=window).sum() / (window - 1.0)
-    open_vol  = log_oc_sq.rolling(window=window).sum() / (window - 1.0)
+    open_vol = log_oc_sq.rolling(window=window).sum() / (window - 1.0)
     window_rs = rs.rolling(window=window).sum() / (window - 1.0)
 
     k = 0.34 / (1.34 + ((window + 1) / (window - 1)))
-    result = (open_vol + k * close_vol + (1 - k) * window_rs).apply(np.sqrt) * np.sqrt(trading_periods)
+    result = (open_vol + k * close_vol + (1 - k) * window_rs).apply(np.sqrt) * np.sqrt(
+        trading_periods
+    )
 
     return result.iloc[-1] if return_last_only else result.dropna()
 
+
 def build_term_structure(days, ivs):
     days = np.array(days)
-    ivs  = np.array(ivs)
+    ivs = np.array(ivs)
     sort_idx = days.argsort()
     days = days[sort_idx]
-    ivs  = ivs[sort_idx]
-    spline = interp1d(days, ivs, kind='linear', fill_value="extrapolate")
+    ivs = ivs[sort_idx]
+    spline = interp1d(days, ivs, kind="linear", fill_value="extrapolate")
 
     def term_spline(dte):
         if dte < days[0]:
@@ -61,11 +66,14 @@ def build_term_structure(days, ivs):
             return ivs[-1]
         else:
             return float(spline(dte))
+
     return term_spline
 
+
 def get_current_price(ticker_obj: yf.Ticker):
-    todays_data = ticker_obj.history(period='1d', auto_adjust=False, actions=False)
-    return todays_data['Close'][0]
+    todays_data = ticker_obj.history(period="1d", auto_adjust=False, actions=False)
+    return todays_data["Close"][0]
+
 
 def compute_recommendation(ticker):
     try:
@@ -80,7 +88,7 @@ def compute_recommendation(ticker):
         exp_dates = list(stock.options)
         try:
             exp_dates = filter_dates(exp_dates)
-        except:
+        except Exception:
             return {"Ticker": ticker, "error": "Not enough option data."}
 
         options_chains = {}
@@ -89,6 +97,8 @@ def compute_recommendation(ticker):
 
         try:
             underlying_price = get_current_price(stock)
+            if underlying_price is None:
+                raise ValueError("No market price found.")
         except Exception:
             return {"Ticker": ticker, "error": "Unable to retrieve stock price."}
 
@@ -97,26 +107,34 @@ def compute_recommendation(ticker):
         i = 0
         for exp_date, chain in options_chains.items():
             calls = chain.calls
-            puts  = chain.puts
+            puts = chain.puts
             if calls.empty or puts.empty:
                 continue
 
-            call_idx = (calls['strike'] - underlying_price).abs().idxmin()
-            put_idx  = (puts['strike']  - underlying_price).abs().idxmin()
+            call_idx = (calls["strike"] - underlying_price).abs().idxmin()
+            put_idx = (puts["strike"] - underlying_price).abs().idxmin()
 
-            call_iv = calls.loc[call_idx, 'impliedVolatility']
-            put_iv  = puts.loc[put_idx,  'impliedVolatility']
+            call_iv = calls.loc[call_idx, "impliedVolatility"]
+            put_iv = puts.loc[put_idx, "impliedVolatility"]
             atm_iv_value = (call_iv + put_iv) / 2.0
             atm_iv[exp_date] = atm_iv_value
 
             if i == 0:
-                call_bid = calls.loc[call_idx, 'bid']
-                call_ask = calls.loc[call_idx, 'ask']
-                put_bid  = puts.loc[put_idx,  'bid']
-                put_ask  = puts.loc[put_idx,  'ask']
+                call_bid = calls.loc[call_idx, "bid"]
+                call_ask = calls.loc[call_idx, "ask"]
+                put_bid = puts.loc[put_idx, "bid"]
+                put_ask = puts.loc[put_idx, "ask"]
 
-                call_mid = (call_bid + call_ask) / 2.0 if call_bid is not None and call_ask is not None else None
-                put_mid  = (put_bid + put_ask) / 2.0 if put_bid is not None and put_ask is not None else None
+                call_mid = (
+                    (call_bid + call_ask) / 2.0
+                    if call_bid is not None and call_ask is not None
+                    else None
+                )
+                put_mid = (
+                    (put_bid + put_ask) / 2.0
+                    if put_bid is not None and put_ask is not None
+                    else None
+                )
                 if call_mid is not None and put_mid is not None:
                     straddle = call_mid + put_mid
             i += 1
@@ -134,21 +152,27 @@ def compute_recommendation(ticker):
         term_spline = build_term_structure(dtes, ivs)
         ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45 - dtes[0])
 
-        price_history = stock.history(period='3mo')
+        price_history = stock.history(period="3mo")
         iv30_rv30 = term_spline(30) / yang_zhang(price_history)
-        avg_volume = price_history['Volume'].rolling(30).mean().dropna().iloc[-1]
-        expected_move = str(round(straddle / underlying_price * 100, 2)) + "%" if straddle else None
+        avg_volume = price_history["Volume"].rolling(30).mean().dropna().iloc[-1]
+
+        # identical expected move logic from legacy
+        expected_move = (
+            str(round(straddle / underlying_price * 100, 2)) + "%"
+            if straddle
+            else None
+        )
 
         return {
             "Ticker": ticker,
-            # Raw metrics
+            # Raw values
             "avg_volume_raw": avg_volume,
             "iv30_rv30_raw": iv30_rv30,
             "ts_slope_0_45_raw": ts_slope_0_45,
-            # Display metrics
-            "Average Volume": avg_volume >= 1_500_000,
-            "IV30 Days RV30 Days": iv30_rv30 >= 1.25,
-            "Term Structure Slope 0-45 Days": ts_slope_0_45 <= -0.00406,
+            # Display metrics (new Streamlit naming)
+            "Average Volume": f"{'✅ PASS' if avg_volume >= 1_500_000 else '❌ FAIL'} ({round(avg_volume, 2):,.0f})",
+            "IV30 Days RV30 Days": f"{'✅ PASS' if iv30_rv30 >= 1.25 else '❌ FAIL'} ({iv30_rv30:.2f})",
+            "Term Structure Slope 0-45 Days": f"{'✅ PASS' if ts_slope_0_45 <= -0.00406 else '❌ FAIL'} ({ts_slope_0_45:.5f})",
             "Expected Move": expected_move,
         }
 
