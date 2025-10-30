@@ -98,5 +98,31 @@ if run_button:
             """
         )
 
+# -----------------------------------------------------------
+        # Diagnostic section: show raw numeric values for verification
+        # -----------------------------------------------------------
+        st.markdown("---")
+        st.subheader("Raw Metric Values (for verification)")
+
+        # Try to extract raw numbers from calculator output
+        numeric_rows = []
+        for res in results:
+            # You must already have calculator values like avg_volume, iv30_rv30, ts_slope_0_45, expected_move
+            # If not, we'll show placeholders
+            numeric_rows.append({
+                "Ticker": res.get("Ticker", res.get("ticker", "")),
+                "Average Volume (Raw)": round(res.get("avg_volume_raw", res.get("avg_volume", 0)), 2)
+                    if isinstance(res.get("avg_volume", 0), (int, float)) else "N/A",
+                "IV30/RV30 (Raw)": round(res.get("iv30_rv30_raw", res.get("iv30_rv30", 0)), 3)
+                    if isinstance(res.get("iv30_rv30", 0), (int, float)) else "N/A",
+                "Term Structure Slope 0–45 (Raw)": round(res.get("ts_slope_0_45_raw", res.get("ts_slope_0_45", 0)), 6)
+                    if isinstance(res.get("ts_slope_0_45", 0), (int, float)) else "N/A",
+                "Expected Move": res.get("Expected Move", res.get("expected_move", "N/A"))
+            })
+
+        raw_df = pd.DataFrame(numeric_rows)
+        st.dataframe(raw_df, use_container_width=True)
+
 else:
     st.info("Enter tickers above and click 'Run'.")
+
