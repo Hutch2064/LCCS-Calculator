@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from calculator_core import compute_recommendation
 
+# -----------------------------------------------------------
+# Streamlit UI
+# -----------------------------------------------------------
+
 st.set_page_config(page_title="Long Call Calendar Spread Calculator", page_icon="📈", layout="wide")
 
 st.title("Long Call Calendar Spread Calculator")
@@ -23,35 +27,31 @@ if run_button:
         st.warning("Please enter at least one ticker.")
     else:
         st.info("Fetching data... please wait ⏳")
+
         results = []
         for t in tickers:
             results.append(compute_recommendation(t))
 
         df = pd.DataFrame(results)
 
-        # Ensure the key columns exist
+        # Expected column names from calculator_core.py
         cols = ["Average Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days"]
 
-        # Store both numeric values and PASS/FAIL
+        # Replace booleans with PASS/FAIL
         for col in cols:
             if col in df.columns:
-                # Create numeric copy
-                df[col + " (Value)"] = df[col]
-                # Replace boolean with PASS/FAIL
                 df[col] = df[col].map({True: "✅ PASS", False: "❌ FAIL"})
 
-        # Decision column — only Optimal if all three pass
+        # Add Decision column: all three must be PASS
         df["Decision"] = df.apply(
-            lambda row: "✅ Optimal" if all(
-                row.get(c) == "✅ PASS" for c in cols
-            ) else "❌ Not Optimal",
+            lambda row: "✅ Optimal" if all(row.get(c) == "✅ PASS" for c in cols) else "❌ Not Optimal",
             axis=1,
         )
 
         st.subheader("Results")
         st.dataframe(df.reset_index(drop=True), use_container_width=True)
 
-        # Allow download as CSV
+        # Download button
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="Download Results",
@@ -84,11 +84,3 @@ if run_button:
 
 else:
     st.info("Enter tickers above and click 'Run'.")
-
-
-
-
-
-
-
-
