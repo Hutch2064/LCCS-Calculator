@@ -148,31 +148,28 @@ def compute_recommendation(ticker):
             atm_iv_value = (call_iv + put_iv) / 2.0
             atm_iv[exp_date] = atm_iv_value
 
-            if i == 0:
-                call_bid = calls.loc[call_idx, 'bid']
-                call_ask = calls.loc[call_idx, 'ask']
-                put_bid = puts.loc[put_idx, 'bid']
-                put_ask = puts.loc[put_idx, 'ask']
+        if i == 0:
+            call_bid = calls.loc[call_idx, 'bid']
+            call_ask = calls.loc[call_idx, 'ask']
+            put_bid  = puts.loc[put_idx,  'bid']
+            put_ask  = puts.loc[put_idx,  'ask']
 
-                if call_bid is not None and call_ask is not None:
-                    call_mid = (call_bid + call_ask) / 2.0
+            # Only change vs legacy: treat NaN like "missing" AND allow lastPrice as the same legacy fallback
+            def safe_mid(bid, ask, last):
+                if pd.notna(bid) and pd.notna(ask) and bid > 0 and ask > 0:
+                    return (bid + ask) / 2.0
+                elif pd.notna(last) and last > 0:
+                    return float(last)
                 else:
-                    call_mid = None
+                    return np.nan
 
-                if put_bid is not None and put_ask is not None:
-                    put_mid = (put_bid + put_ask) / 2.0
-                else:
-                    put_mid = None
+        call_mid = safe_mid(call_bid, call_ask, calls.loc[call_idx, 'lastPrice'])
+        put_mid  = safe_mid(put_bid,  put_ask,  puts.loc[put_idx,  'lastPrice'])
 
-                if pd.notna(call_bid) and pd.notna(call_ask):
-                    call_mid = (call_bid + call_ask) / 2.0
-                else:
-                    call_mid = None
-
-                if pd.notna(put_bid) and pd.notna(put_ask):
-                    put_mid = (put_bid + put_ask) / 2.0
-                else:
-                    put_mid = None
+        if pd.notna(call_mid) and pd.notna(put_mid):
+            straddle = float(call_mid + put_mid)
+        else:
+            straddle = None
 
             i += 1
 
@@ -249,4 +246,5 @@ if run:
             st.write(f"Expected Move: {expected_move}")
     except Exception as e:
         st.error(str(e))
+
 
