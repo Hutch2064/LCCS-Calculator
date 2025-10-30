@@ -184,13 +184,14 @@ def compute_recommendation(ticker):
         expected_move = f"{round((straddle / underlying_price) * 100, 2)}%" if straddle else None
 
         return {
-            "ticker": ticker,
-            "avg_volume": avg_volume >= 1_500_000,
-            "iv30_rv30": iv30_rv30 >= 1.25,
-            "ts_slope_0_45": ts_slope_0_45 <= -0.00406,
-            "expected_move": expected_move,
+            "Ticker": ticker,
+            "Average Volume": avg_volume >= 1_500_000,
+            "IV30D vs RV30D": iv30_rv30 >= 1.25,
+            "Term Structure Slope 0-45 Days": ts_slope_0_45 <= -0.00406,
+            "Expected Move": expected_move,
         }
 
     except Exception as e:
         traceback.print_exc()
         return {"ticker": ticker, "error": str(e)}
+
