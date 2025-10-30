@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from calculator_core import compute_recommendation
 
-st.set_page_config(page_title="Earnings Position Checker", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Long Call Calendar Spread Calculator", page_icon="📈", layout="wide")
 
-st.title("📈 Earnings Position Checker (Web)")
+st.title("Long Call Calendar Spread Calculator")
 st.markdown(
     "Enter one or more stock tickers separated by commas below, then click **Run Analysis** to see the key option metrics."
 )
@@ -50,6 +50,7 @@ if run_button:
 
 else:
     st.info("Enter tickers above and click **Run Analysis**.")
+
 
 
 
