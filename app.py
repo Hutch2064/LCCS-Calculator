@@ -1,6 +1,6 @@
 # ==========================================================
 # LONG CALL CALENDAR SPREAD CALCULATOR — Streamlit Version
-# Verbatim legacy logic, identical calculations
+# Verbatim legacy logic, identical calculations (with IV scaling + diagnostics)
 # ==========================================================
 
 import streamlit as st
@@ -183,7 +183,7 @@ def compute_recommendation(ticker):
             exp_date_obj = datetime.strptime(exp_date, "%Y-%m-%d").date()
             days_to_expiry = (exp_date_obj - today).days
             dtes.append(days_to_expiry)
-            ivs.append(iv)
+            ivs.append(iv * 100.0)  # ✅ FIX: Convert implied vol from fraction to percentage (legacy behavior)
 
         term_spline = build_term_structure(dtes, ivs)
 
@@ -259,6 +259,13 @@ if run:
             st.write(f"Average Volume (Raw): {result.get('avg_volume_raw', 'N/A'):,}")
             st.write(f"IV30/RV30 (Raw): {result.get('iv30_rv30_raw', 'N/A'):.4f}")
             st.write(f"Term Structure Slope 0-45 (Raw): {result.get('ts_slope_0_45_raw', 'N/A'):.6f}")
+
+            # --- Criteria printout ---
+            st.markdown("---")
+            st.subheader("Selection Criteria")
+            st.write("✅ avg_volume ≥ 1,500,000")
+            st.write("✅ iv30_rv30 ≥ 1.25")
+            st.write("✅ ts_slope_0_45 ≤ -0.00406")
 
     except Exception as e:
         st.error(str(e))
