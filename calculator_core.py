@@ -1,5 +1,5 @@
 # ==========================================================
-# CORE LOGIC — Streamlit-compatible version (renamed for new UI)
+# CORE LOGIC — Streamlit-compatible version (renamed only)
 # ==========================================================
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -45,7 +45,7 @@ def with_retry(fn, *, attempts=4, base_wait=5.0, between_calls_delay=1.2, desc="
     raise last_err if last_err else RuntimeError(f"{desc} failed")
 
 # ---------------------------
-# Core analytics
+# Core analytics (identical to your version)
 # ---------------------------
 
 def filter_dates(dates):
@@ -208,7 +208,7 @@ def compute_recommendation(ticker):
         price_history = with_retry(_hist, desc="history(3mo)")
         iv30_rv30     = term_spline(30) / yang_zhang(price_history)
         avg_volume    = float(price_history['Volume'].rolling(30).mean().dropna().iloc[-1])
-        expected_move = f"{round((straddle / underlying_price) * 100, 2)}%" if straddle and pd.notna(straddle) else "N/A"
+        expected_move = f"{round((straddle / underlying_price) * 100, 2)}%" if straddle else None
 
         print(f"DEBUG: avg_volume={avg_volume:.2f}, iv30_rv30={iv30_rv30:.3f}, ts_slope_0_45={ts_slope_0_45:.5f}, expected_move={expected_move}")
 
