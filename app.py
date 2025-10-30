@@ -164,8 +164,15 @@ def compute_recommendation(ticker):
                 else:
                     put_mid = None
 
-                if call_mid is not None and put_mid is not None:
-                    straddle = (call_mid + put_mid)
+                if pd.notna(call_bid) and pd.notna(call_ask):
+                    call_mid = (call_bid + call_ask) / 2.0
+                else:
+                    call_mid = None
+
+                if pd.notna(put_bid) and pd.notna(put_ask):
+                    put_mid = (put_bid + put_ask) / 2.0
+                else:
+                    put_mid = None
 
             i += 1
 
@@ -242,3 +249,4 @@ if run:
             st.write(f"Expected Move: {expected_move}")
     except Exception as e:
         st.error(str(e))
+
