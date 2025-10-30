@@ -37,26 +37,16 @@ if run_button:
         # Expected columns returned from calculator_core.py
         cols = ["Average Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days"]
 
-        # We’ll recreate the display columns with both PASS/FAIL and numeric values
-        # Fetch numeric values by recalculating from same logic via compute_recommendation output
-        display_df = []
-        for row in results:
-            display_row = dict(row)
-            for col in cols:
-                # Compute the numeric metric value by inferring threshold direction
-                if col == "Average Volume":
-                    val = "?"  # Calculator does not return raw value directly
-                elif col == "IV30 Days RV30 Days":
-                    val = "?"
-                elif col == "Term Structure Slope 0-45 Days":
-                    val = "?"
-                # Attach PASS/FAIL to value string if available
-                state = "✅ PASS" if row.get(col) else "❌ FAIL"
-                # If numeric value fields are missing (since calculator returns bools only), skip
-                display_row[col] = f"{state}"
-            display_df.append(display_row)
+        # Build DataFrame directly from calculator output
+        df = pd.DataFrame(results)
 
-        df = pd.DataFrame(display_df)
+        # Add decision column: all three must be PASS
+        cols = ["Average Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days"]
+        df["Decision"] = df.apply(
+            lambda row: "✅ Optimal" if all("✅ PASS" in str(row.get(c, "")) for c in cols)
+            else "❌ Not Optimal",
+            axis=1,
+        )
 
         # Add decision column: all three must be PASS
         df["Decision"] = df.apply(
@@ -125,4 +115,5 @@ if run_button:
 
 else:
     st.info("Enter tickers above and click 'Run'.")
+
 
