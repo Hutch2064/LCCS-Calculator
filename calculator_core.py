@@ -1,5 +1,5 @@
 # ==========================================================
-# CORE LOGIC for Streamlit version of the Earnings Position Checker
+# CORE LOGIC for Streamlit version of the Long Call Calendar Spread Calculator
 # ==========================================================
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -23,7 +23,7 @@ def _is_rate_limit(err: Exception) -> bool:
     msg = str(err).lower()
     return ("429" in msg) or ("too many" in msg) or ("rate limit" in msg) or ("temporarily unavailable" in msg)
 
-def with_retry(fn, *, attempts=4, base_wait=5.0, between_calls_delay=1.2, desc=""):
+def with_retry(fn, *, attempts=4, base_wait=5.0, between_calls_delay=.5, desc=""):
     """Retry wrapper for yfinance calls with exponential backoff."""
     last_err = None
     wait = base_wait
@@ -194,4 +194,5 @@ def compute_recommendation(ticker):
     except Exception as e:
         traceback.print_exc()
         return {"ticker": ticker, "error": str(e)}
+
 
