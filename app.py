@@ -30,7 +30,7 @@ if run_button:
         df = pd.DataFrame(results)
 
         # Replace boolean True/False with PASS/FAIL strings
-        for col in ["Average_Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days]:
+        for col in ["Average Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days]:
             if col in df.columns:
                 df[col] = df[col].map({True: "✅ PASS", False: "❌ FAIL"})
 
@@ -50,6 +50,7 @@ if run_button:
 
 else:
     st.info("Enter tickers above and click **Run Analysis**.")
+
 
 
 
