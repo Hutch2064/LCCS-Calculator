@@ -29,14 +29,26 @@ if run_button:
 
         df = pd.DataFrame(results)
 
-        # Replace boolean True/False with PASS/FAIL strings
-        for col in ["Average Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days"]:
+        # Ensure the key columns exist
+        cols = ["Average Volume", "IV30 Days RV30 Days", "Term Structure Slope 0-45 Days"]
+
+        # Store both numeric values and PASS/FAIL
+        for col in cols:
             if col in df.columns:
+                # Create numeric copy
+                df[col + " (Value)"] = df[col]
+                # Replace boolean with PASS/FAIL
                 df[col] = df[col].map({True: "✅ PASS", False: "❌ FAIL"})
 
-        st.subheader("Results")
+        # Decision column — only Optimal if all three pass
+        df["Decision"] = df.apply(
+            lambda row: "✅ Optimal" if all(
+                row.get(c) == "✅ PASS" for c in cols
+            ) else "❌ Not Optimal",
+            axis=1,
+        )
 
-        # Show a clean DataFrame without row index
+        st.subheader("Results")
         st.dataframe(df.reset_index(drop=True), use_container_width=True)
 
         # Allow download as CSV
@@ -48,8 +60,31 @@ if run_button:
             mime="text/csv",
         )
 
+        # Explanatory section
+        st.markdown("---")
+        st.subheader("Metric Explanations")
+        st.markdown(
+            """
+            **Average Volume (≥ 1.5 million shares)**  
+            Liquidity filter — ensures the option chain is active enough for reliable pricing and spreads.
+
+            **IV30 Days / RV30 Days (≥ 1.25)**  
+            Ratio of 30-day implied volatility (option-implied) to realized volatility (historical).  
+            Values above 1.25 suggest options are pricing in higher future volatility — favorable for calendar spreads.
+
+            **Term Structure Slope 0–45 Days (≤ −0.00406)**  
+            Measures how implied volatility changes with time to expiry.  
+            A negative slope indicates near-term IV is elevated relative to longer-term IV — ideal for a long call calendar setup.
+
+            **Decision**  
+            “✅ Optimal” = all three core filters satisfied.  
+            “❌ Not Optimal” = one or more filters failed.
+            """
+        )
+
 else:
     st.info("Enter tickers above and click 'Run'.")
+
 
 
 
