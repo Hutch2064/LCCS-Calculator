@@ -183,17 +183,26 @@ def compute_recommendation(ticker):
         avg_volume    = float(price_history['Volume'].rolling(30).mean().dropna().iloc[-1])
         expected_move = f"{round((straddle / underlying_price) * 100, 2)}%" if straddle else None
 
+       # --- Final synced return for Streamlit integration ---
         return {
             "Ticker": ticker,
+
+            # Raw metric values (for display)
+            "Average Volume (Value)": float(avg_volume) if np.isfinite(avg_volume) else np.nan,
+            "IV30 Days RV30 Days (Value)": float(iv30_rv30) if np.isfinite(iv30_rv30) else np.nan,
+            "Term Structure Slope 0-45 Days (Value)": float(ts_slope_0_45) if np.isfinite(ts_slope_0_45) else np.nan,
+            "Expected Move": expected_move or "N/A",
+
+            # Criteria evaluations (for PASS/FAIL)
             "Average Volume": avg_volume >= 1_500_000,
             "IV30 Days RV30 Days": iv30_rv30 >= 1.25,
             "Term Structure Slope 0-45 Days": ts_slope_0_45 <= -0.00406,
-            "Expected Move": expected_move,
         }
 
     except Exception as e:
         traceback.print_exc()
         return {"ticker": ticker, "error": str(e)}
+
 
 
 
