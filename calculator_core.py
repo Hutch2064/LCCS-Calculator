@@ -141,12 +141,13 @@ def compute_recommendation(ticker):
 
         return {
             "Ticker": ticker,
-            "Average Volume": avg_volume >= 1_500_000,
-            "IV30 Days RV30 Days": iv30_rv30 >= 1.25,
-            "Term Structure Slope 0-45 Days": ts_slope_0_45 <= -0.00406,
-            "Expected Move": expected_move
+            "Average Volume": f"{'✅ PASS' if avg_volume >= 1_500_000 else '❌ FAIL'} ({round(avg_volume, 2):,.0f})",
+            "IV30 Days RV30 Days": f"{'✅ PASS' if iv30_rv30 >= 1.25 else '❌ FAIL'} ({iv30_rv30:.2f})",
+            "Term Structure Slope 0-45 Days": f"{'✅ PASS' if ts_slope_0_45 <= -0.00406 else '❌ FAIL'} ({ts_slope_0_45:.5f})",
+            "Expected Move": expected_move,
         }
 
     except Exception as e:
         traceback.print_exc()
         return {"Ticker": ticker, "error": str(e)}
+
