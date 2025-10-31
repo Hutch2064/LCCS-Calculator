@@ -255,59 +255,28 @@ st.markdown("---")
 st.subheader("📊 Screener: Earnings in Next 5 Days")
 
 def get_upcoming_earnings(days_ahead=5):
-    today = datetime.now().date()
-    end_date = today + timedelta(days=days_ahead)
     API_KEY = "TOZeLakxCgQ0lZn9hdqZ4wuy7aUpV86C"
-    url = f"https://financialmodelingprep.com/api/v3/earning_calendar?from={today}&to={end_date}&apikey={API_KEY}"
+    url = f"https://financialmodelingprep.com/api/v3/earning_calendar?period=quarter&limit=500&apikey={API_KEY}"
     try:
         data = requests.get(url, timeout=10).json()
-        tickers = [d["symbol"] for d in data if "symbol" in d]
+        today = datetime.now().date()
+        end_date = today + timedelta(days=days_ahead)
+
+        # Filter only those within the next few days
+        tickers = []
+        for d in data:
+            if "symbol" in d and "date" in d:
+                try:
+                    report_date = datetime.strptime(d["date"], "%Y-%m-%d").date()
+                    if today <= report_date <= end_date:
+                        tickers.append(d["symbol"])
+                except Exception:
+                    continue
         return list(set(tickers))
-    except Exception:
+    except Exception as e:
+        st.warning(f"API error: {e}")
         return []
 
-if st.button("Run Screener"):
-    try:
-        tickers = get_upcoming_earnings(5)
-        st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
-
-        if len(tickers) == 0:
-            st.warning("No upcoming earnings found.")
-        else:
-            progress_bar = st.progress(0)
-            output = []
-            total = len(tickers)
-            done = 0
-
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(compute_recommendation, t): t for t in tickers}
-                for future in as_completed(futures):
-                    t = futures[future]
-                    try:
-                        res = future.result()
-                        if isinstance(res, dict):
-                            a, b, c = res['avg_volume'], res['iv30_rv30'], res['ts_slope_0_45']
-                            if a and b and c:
-                                output.append({
-                                    'Ticker': t,
-                                    'Avg Volume': f"{res['avg_volume_raw']:,}",
-                                    'IV30/RV30': f"{res['iv30_rv30_raw']:.4f}",
-                                    'TS Slope 0-45': f"{res['ts_slope_0_45_raw']:.6f}",
-                                    'Expected Move': res['expected_move']
-                                })
-                    except Exception:
-                        pass
-                    done += 1
-                    progress_bar.progress(int(done / total * 100))
-
-            if len(output) == 0:
-                st.warning("No stocks met all criteria.")
-            else:
-                st.success(f"{len(output)} stocks passed all criteria.")
-                st.dataframe(pd.DataFrame(output))
-
-    except Exception as e:
-        st.error(f"Error running screener: {e}")
 
 
 
