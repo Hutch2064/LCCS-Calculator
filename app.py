@@ -199,8 +199,8 @@ def compute_recommendation(ticker):
 # Streamlit UI: Single-Ticker
 # ==========================================================
 
-st.set_page_config(page_title="Earnings Position Checker", page_icon="📈", layout="wide")
-st.title("📈 Earnings Position Checker (Streamlit)")
+st.set_page_config(page_title="Long Call Calendar Spread Calculator", page_icon="📈", layout="wide")
+st.title("📈 Long Call Calendar Spread Calculator")
 
 ticker = st.text_input("Enter Stock Symbol:", "AAPL")
 run = st.button("Submit")
@@ -280,7 +280,7 @@ def get_upcoming_earnings(days_ahead=5):
 
 if st.button("Run Screener"):
     try:
-        st.info("Fetching upcoming earnings tickers from Nasdaq...")
+        st.info("Fetching...")
         tickers = get_upcoming_earnings(5)
         st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
 
@@ -324,4 +324,5 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
