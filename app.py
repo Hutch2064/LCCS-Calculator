@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import requests
+import gc
 
 # ---------------------------
 # Helper functions (verbatim)
@@ -48,22 +51,38 @@ def yang_zhang(price_data, window=30, trading_periods=252, return_last_only=True
 
     rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
 
-    close_vol = log_cc_sq.rolling(window=window).sum() * (1.0 / (window - 1.0))
-    open_vol = log_oc_sq.rolling(window=window).sum() * (1.0 / (window - 1.0))
-    window_rs = rs.rolling(window=window).sum() * (1.0 / (window - 1.0))
+    close_vol = log_cc_sq.rolling(
+        window=window,
+        center=False
+    ).sum() * (1.0 / (window - 1.0))
 
-    k = 0.34 / (1.34 + ((window + 1) / (window - 1)))
+    open_vol = log_oc_sq.rolling(
+        window=window,
+        center=False
+    ).sum() * (1.0 / (window - 1.0))
+
+    window_rs = rs.rolling(
+        window=window,
+        center=False
+    ).sum() * (1.0 / (window - 1.0))
+
+    k = 0.34 / (1.34 + ((window + 1) / (window - 1)) )
     result = (open_vol + k * close_vol + (1 - k) * window_rs).apply(np.sqrt) * np.sqrt(trading_periods)
 
-    return result.iloc[-1] if return_last_only else result.dropna()
+    if return_last_only:
+        return result.iloc[-1]
+    else:
+        return result.dropna()
 
 
 def build_term_structure(days, ivs):
     days = np.array(days)
     ivs = np.array(ivs)
+
     sort_idx = days.argsort()
     days = days[sort_idx]
     ivs = ivs[sort_idx]
+
     spline = interp1d(days, ivs, kind='linear', fill_value="extrapolate")
 
     def term_spline(dte):
@@ -118,6 +137,7 @@ def compute_recommendation(ticker):
         for exp_date, chain in options_chains.items():
             calls = chain.calls
             puts = chain.puts
+
             if calls.empty or puts.empty:
                 continue
 
@@ -160,7 +180,8 @@ def compute_recommendation(ticker):
             return "Error: Could not determine ATM IV for any expiration dates."
 
         today = datetime.today().date()
-        dtes, ivs = [], []
+        dtes = []
+        ivs = []
         for exp_date, iv in atm_iv.items():
             exp_date_obj = datetime.strptime(exp_date, "%Y-%m-%d").date()
             days_to_expiry = (exp_date_obj - today).days
@@ -172,8 +193,10 @@ def compute_recommendation(ticker):
 
         price_history = stock.history(period='3mo')
         iv30_rv30 = term_spline(30) / yang_zhang(price_history)
+
         avg_volume = price_history['Volume'].rolling(30).mean().dropna().iloc[-1]
-        expected_move = str(round(straddle / underlying_price * 100, 2)) + "%" if straddle else None
+
+        expected_move = str(round(straddle / underlying_price * 100,2)) + "%" if straddle else None
 
         raw_values = {
             'avg_volume_raw': avg_volume,
@@ -188,22 +211,19 @@ def compute_recommendation(ticker):
             'expected_move': expected_move,
             **raw_values
         }
-
     except Exception:
         raise Exception('Error occured processing')
 
-# ==========================================================
-# Streamlit UI
-# ==========================================================
+
+# ---------------------------
+# Streamlit UI (thin shell)
+# ---------------------------
 st.set_page_config(page_title="Earnings Position Checker", page_icon="📈", layout="wide")
 st.title("📈 Earnings Position Checker (Streamlit)")
 
 ticker = st.text_input("Enter Stock Symbol:", "AAPL")
 run = st.button("Submit")
 
-# ---------------------------
-# Single ticker mode
-# ---------------------------
 if run:
     try:
         result = compute_recommendation(ticker)
@@ -246,21 +266,16 @@ if run:
     except Exception as e:
         st.error(str(e))
 
-# ---------------------------
-# Screener Mode: Earnings Next 5 Days
-# ---------------------------
-import requests
 
+# ==========================================================
+# Screener Mode: Earnings Next 5 Days
+# ==========================================================
 st.markdown("---")
 st.subheader("📊 Screener: Earnings in Next 5 Days")
-
-import requests
 
 def get_upcoming_earnings(days_ahead=5):
     today = datetime.now().date()
     tickers = set()
-
-    # Nasdaq publishes one JSON per date (UTC). We'll fetch each day separately.
     for i in range(days_ahead + 1):
         query_date = today + timedelta(days=i)
         url = f"https://api.nasdaq.com/api/calendar/earnings?date={query_date.strftime('%Y-%m-%d')}"
@@ -268,7 +283,6 @@ def get_upcoming_earnings(days_ahead=5):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Accept": "application/json, text/plain, */*",
         }
-
         try:
             r = requests.get(url, headers=headers, timeout=10)
             if r.status_code == 200:
@@ -280,8 +294,8 @@ def get_upcoming_earnings(days_ahead=5):
                         tickers.add(symbol.strip().upper())
         except Exception:
             continue
-
     return sorted(list(tickers))
+
 # ----------------------------------------------------------
 # Run Screener button and progress output
 # ----------------------------------------------------------
@@ -294,14 +308,21 @@ if st.button("Run Screener"):
         if len(tickers) == 0:
             st.warning("No upcoming earnings found. Nasdaq data may refresh overnight (try again later).")
         else:
+            # Defensive cleanup to prevent session contamination between Yahoo calls
+            try:
+                yf.utils._requests.session.close()
+            except Exception:
+                pass
+            gc.collect()
+
             progress_bar = st.progress(0)
             results = []
             total = len(tickers)
             done = 0
 
-            # Parallel execution for speed
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(compute_recommendation, t): t for t in tickers}
+            # Limit max workers & throttle slightly to avoid Yahoo rate-limits
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {executor.submit(compute_recommendation, t): t for t in tickers if t.isalpha() and len(t) <= 5}
                 for future in as_completed(futures):
                     t = futures[future]
                     try:
@@ -320,6 +341,14 @@ if st.button("Run Screener"):
                         pass
                     done += 1
                     progress_bar.progress(min(int(done / total * 100), 100))
+                    time.sleep(0.25)  # small delay to avoid throttling
+
+            # Close Yahoo session cleanly again
+            try:
+                yf.utils._requests.session.close()
+            except Exception:
+                pass
+            gc.collect()
 
             if len(results) == 0:
                 st.warning("No stocks met all criteria.")
@@ -329,8 +358,3 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
-
-
-
-
-
