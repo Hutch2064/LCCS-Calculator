@@ -256,14 +256,18 @@ if st.button("Run Screener"):
     try:
         today = datetime.now().date()
         end_date = today + timedelta(days=5)
+
         with st.spinner("Fetching upcoming earnings..."):
-    try:
-        cal = yf.shared._research.get_earnings_dates(start=today.strftime('%Y-%m-%d'),
-                                                     end=end_date.strftime('%Y-%m-%d'))
-        tickers = cal['symbol'].unique().tolist()
-    except Exception:
-        st.warning("Could not fetch earnings from Yahoo. Using fallback.")
-        tickers = []
+            try:
+                # Using yfinance internal research endpoint (replacement for removed earnings_calendar)
+                cal = yf.shared._research.get_earnings_dates(
+                    start=today.strftime('%Y-%m-%d'),
+                    end=end_date.strftime('%Y-%m-%d')
+                )
+                tickers = cal['symbol'].unique().tolist()
+            except Exception:
+                st.warning("Could not fetch earnings from Yahoo. Using fallback empty list.")
+                tickers = []
 
         st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
 
