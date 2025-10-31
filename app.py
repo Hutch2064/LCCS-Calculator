@@ -257,7 +257,8 @@ st.subheader("📊 Screener: Earnings in Next 5 Days")
 def get_upcoming_earnings(days_ahead=5):
     today = datetime.now().date()
     end_date = today + timedelta(days=days_ahead)
-    url = f"https://financialmodelingprep.com/api/v3/earning_calendar?from={today}&to={end_date}&apikey=demo"
+    API_KEY = "TOZeLakxCgQ0lZn9hdqZ4wuy7aUpV86C"
+    url = f"https://financialmodelingprep.com/api/v3/earning_calendar?from={today}&to={end_date}&apikey={API_KEY}"
     try:
         data = requests.get(url, timeout=10).json()
         tickers = [d["symbol"] for d in data if "symbol" in d]
@@ -307,6 +308,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
