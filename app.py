@@ -16,6 +16,8 @@ import requests
 import gc
 from pandas.tseries.offsets import BDay
 
+yf_session = yf.utils.get_yf_session()
+
 # ---------------------------
 # Helper functions (verbatim)
 # ---------------------------
@@ -109,7 +111,7 @@ def compute_recommendation(ticker):
             return "No stock symbol provided."
 
         try:
-            stock = yf.Ticker(ticker)
+            stock = yf.Ticker(ticker, session=yf_session)
             if len(stock.options) == 0:
                 raise KeyError()
         except KeyError:
@@ -361,6 +363,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
