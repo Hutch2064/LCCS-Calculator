@@ -14,9 +14,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import requests
 import gc
-from pandas.tseries.offsets import BDay
-import requests
-yf_session = requests.Session()
+
+# Persistent Yahoo session to prevent connection resets
+session = requests.Session()
 
 # ---------------------------
 # Helper functions (verbatim)
@@ -110,12 +110,19 @@ def compute_recommendation(ticker):
         if not ticker:
             return "No stock symbol provided."
 
-        try:
-            stock = yf.Ticker(ticker, session=yf_session)
-            if len(stock.options) == 0:
-                raise KeyError()
-        except KeyError:
-            return f"Error: No options found for stock symbol '{ticker}'."
+        # Robust retry logic for Yahoo data fetch
+        for attempt in range(3):
+            try:
+                stock = yf.Ticker(ticker, session=session)
+                if len(stock.options) == 0:
+                    raise KeyError()
+                break
+            except Exception:
+                if attempt < 2:
+                    time.sleep(1.5)
+                    continue
+                else:
+                    return f"Error: No options found for stock symbol '{ticker}'."
 
         exp_dates = list(stock.options)
         try:
@@ -140,7 +147,6 @@ def compute_recommendation(ticker):
         for exp_date, chain in options_chains.items():
             calls = chain.calls
             puts = chain.puts
-
             if calls.empty or puts.empty:
                 continue
 
@@ -176,30 +182,26 @@ def compute_recommendation(ticker):
             straddle = float(call_mid + put_mid)
         else:
             straddle = None
-
             i += 1
 
         if not atm_iv:
             return "Error: Could not determine ATM IV for any expiration dates."
 
         today = datetime.today().date()
-        dtes = []
-        ivs = []
+        dtes, ivs = [], []
         for exp_date, iv in atm_iv.items():
             exp_date_obj = datetime.strptime(exp_date, "%Y-%m-%d").date()
             days_to_expiry = (exp_date_obj - today).days
             dtes.append(days_to_expiry)
-            ivs.append(iv)
+            ivs.append(iv * 100.0)
 
         term_spline = build_term_structure(dtes, ivs)
         ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45 - dtes[0])
 
         price_history = stock.history(period='3mo')
         iv30_rv30 = term_spline(30) / yang_zhang(price_history)
-
         avg_volume = price_history['Volume'].rolling(30).mean().dropna().iloc[-1]
-
-        expected_move = str(round(straddle / underlying_price * 100,2)) + "%" if straddle else None
+        expected_move = str(round(straddle / underlying_price * 100, 2)) + "%" if straddle else None
 
         raw_values = {
             'avg_volume_raw': avg_volume,
@@ -214,6 +216,7 @@ def compute_recommendation(ticker):
             'expected_move': expected_move,
             **raw_values
         }
+
     except Exception:
         raise Exception('Error occured processing')
 
@@ -274,15 +277,13 @@ if run:
 # Screener Mode: Earnings Next 5 Days
 # ==========================================================
 st.markdown("---")
-st.subheader("Screener: Earnings in Next 5 Trading Days")
-
-from pandas.tseries.offsets import BDay
+st.subheader("📊 Screener: Earnings in Next 5 Days")
 
 def get_upcoming_earnings(days_ahead=5):
     today = datetime.now().date()
     tickers = set()
-    for i in range(1, days_ahead + 1):
-        query_date = (today + BDay(i)).date()
+    for i in range(days_ahead + 1):
+        query_date = today + timedelta(days=i)
         url = f"https://api.nasdaq.com/api/calendar/earnings?date={query_date.strftime('%Y-%m-%d')}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -306,14 +307,13 @@ def get_upcoming_earnings(days_ahead=5):
 # ----------------------------------------------------------
 if st.button("Run Screener"):
     try:
-        st.info("Fetching stocks with upcoming earnings...")
+        st.info("Fetching upcoming earnings tickers from Nasdaq...")
         tickers = get_upcoming_earnings(5)
-        st.write(f"Found {len(tickers)} stocks with earnings in the next 5 trading days.")
+        st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
 
         if len(tickers) == 0:
             st.warning("No upcoming earnings found. Nasdaq data may refresh overnight (try again later).")
         else:
-            # Defensive cleanup to prevent session contamination between Yahoo calls
             try:
                 yf.utils._requests.session.close()
             except Exception:
@@ -325,8 +325,7 @@ if st.button("Run Screener"):
             total = len(tickers)
             done = 0
 
-            # Limit max workers & throttle slightly to avoid Yahoo rate-limits
-            with ThreadPoolExecutor(max_workers=5) as executor:
+            with ThreadPoolExecutor(max_workers=3) as executor:
                 futures = {executor.submit(compute_recommendation, t): t for t in tickers if t.isalpha() and len(t) <= 5}
                 for future in as_completed(futures):
                     t = futures[future]
@@ -346,9 +345,8 @@ if st.button("Run Screener"):
                         pass
                     done += 1
                     progress_bar.progress(min(int(done / total * 100), 100))
-                    time.sleep(0.1)  # small delay to avoid throttling
+                    time.sleep(0.25)
 
-            # Close Yahoo session cleanly again
             try:
                 yf.utils._requests.session.close()
             except Exception:
@@ -363,12 +361,6 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
-
-
-
-
-
-
 
 
 
