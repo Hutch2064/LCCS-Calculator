@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import requests
 import gc
+from pandas.tseries.offsets import BDay
 
 # ---------------------------
 # Helper functions (verbatim)
@@ -271,14 +272,14 @@ if run:
 # Screener Mode: Earnings Next 5 Days
 # ==========================================================
 st.markdown("---")
-st.subheader("Screener: Earnings in Next Trading Day")
+st.subheader("Screener: Earnings in Next 5 Trading Days")
 
 from pandas.tseries.offsets import BDay
 
 def get_upcoming_earnings(days_ahead=5):
     today = datetime.now().date()
     tickers = set()
-    for i in range(days_ahead + 5):
+    for i in range(1, days_ahead + 1):
         query_date = (today + BDay(i)).date()
         url = f"https://api.nasdaq.com/api/calendar/earnings?date={query_date.strftime('%Y-%m-%d')}"
         headers = {
@@ -304,8 +305,8 @@ def get_upcoming_earnings(days_ahead=5):
 if st.button("Run Screener"):
     try:
         st.info("Fetching stocks with upcoming earnings...")
-        tickers = get_upcoming_earnings(1)
-        st.write(f"Found {len(tickers)} tickers with earnings in the next trading day.")
+        tickers = get_upcoming_earnings(5)
+        st.write(f"Found {len(tickers)} tickers with earnings in the next 5 trading day.")
 
         if len(tickers) == 0:
             st.warning("No upcoming earnings found. Nasdaq data may refresh overnight (try again later).")
@@ -360,6 +361,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
