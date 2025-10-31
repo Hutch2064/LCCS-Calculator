@@ -273,7 +273,9 @@ if run:
 st.markdown("---")
 st.subheader("📊 Screener: Earnings in Next 5 Days")
 
-def get_upcoming_earnings(days_ahead=5):
+from pandas.tseries.offsets import BDay
+
+def get_upcoming_earnings(days_ahead=1):
     today = datetime.now().date()
     tickers = set()
     for i in range(days_ahead + 1):
@@ -358,4 +360,5 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
