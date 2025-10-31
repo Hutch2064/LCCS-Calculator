@@ -186,7 +186,7 @@ def compute_recommendation(ticker):
             exp_date_obj = datetime.strptime(exp_date, "%Y-%m-%d").date()
             days_to_expiry = (exp_date_obj - today).days
             dtes.append(days_to_expiry)
-            ivs.append(iv * 100.0)
+            ivs.append(iv)
 
         term_spline = build_term_structure(dtes, ivs)
         ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45 - dtes[0])
@@ -358,3 +358,4 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
