@@ -279,7 +279,7 @@ def get_upcoming_earnings(days_ahead=1):
     today = datetime.now().date()
     tickers = set()
     for i in range(days_ahead + 1):
-        query_date = today + timedelta(days=i)
+        query_date = (today + BDay(i)).date()
         url = f"https://api.nasdaq.com/api/calendar/earnings?date={query_date.strftime('%Y-%m-%d')}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -360,6 +360,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
