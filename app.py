@@ -15,8 +15,8 @@ import time
 import requests
 import gc
 from pandas.tseries.offsets import BDay
-
-yf_session = yf.utils.get_yf_session()
+import requests
+yf_session = requests.Session()
 
 # ---------------------------
 # Helper functions (verbatim)
@@ -363,6 +363,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
