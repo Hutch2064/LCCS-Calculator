@@ -271,7 +271,7 @@ if run:
 # Screener Mode: Earnings Next 5 Days
 # ==========================================================
 st.markdown("---")
-st.subheader("📊 Screener: Earnings in Next 5 Days")
+st.subheader("Screener: Earnings in Next Trading Day")
 
 from pandas.tseries.offsets import BDay
 
@@ -360,5 +360,6 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
