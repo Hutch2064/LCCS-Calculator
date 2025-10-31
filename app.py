@@ -249,26 +249,25 @@ if run:
 # ---------------------------
 # Screener Mode: Earnings Next 5 Days
 # ---------------------------
+import requests
+
 st.markdown("---")
 st.subheader("📊 Screener: Earnings in Next 5 Days")
 
+def get_upcoming_earnings(days_ahead=5):
+    today = datetime.now().date()
+    end_date = today + timedelta(days=days_ahead)
+    url = f"https://financialmodelingprep.com/api/v3/earning_calendar?from={today}&to={end_date}&apikey=demo"
+    try:
+        data = requests.get(url, timeout=10).json()
+        tickers = [d["symbol"] for d in data if "symbol" in d]
+        return list(set(tickers))
+    except Exception:
+        return []
+
 if st.button("Run Screener"):
     try:
-        today = datetime.now().date()
-        end_date = today + timedelta(days=5)
-
-        with st.spinner("Fetching upcoming earnings..."):
-            try:
-                # Using yfinance internal research endpoint (replacement for removed earnings_calendar)
-                cal = yf.shared._research.get_earnings_dates(
-                    start=today.strftime('%Y-%m-%d'),
-                    end=end_date.strftime('%Y-%m-%d')
-                )
-                tickers = cal['symbol'].unique().tolist()
-            except Exception:
-                st.warning("Could not fetch earnings from Yahoo. Using fallback empty list.")
-                tickers = []
-
+        tickers = get_upcoming_earnings(5)
         st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
 
         if len(tickers) == 0:
@@ -308,4 +307,6 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
+
 
