@@ -10,6 +10,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 import pandas as pd
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ---------------------------
 # Helper functions (verbatim)
@@ -47,38 +48,22 @@ def yang_zhang(price_data, window=30, trading_periods=252, return_last_only=True
 
     rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
 
-    close_vol = log_cc_sq.rolling(
-        window=window,
-        center=False
-    ).sum() * (1.0 / (window - 1.0))
+    close_vol = log_cc_sq.rolling(window=window).sum() * (1.0 / (window - 1.0))
+    open_vol = log_oc_sq.rolling(window=window).sum() * (1.0 / (window - 1.0))
+    window_rs = rs.rolling(window=window).sum() * (1.0 / (window - 1.0))
 
-    open_vol = log_oc_sq.rolling(
-        window=window,
-        center=False
-    ).sum() * (1.0 / (window - 1.0))
-
-    window_rs = rs.rolling(
-        window=window,
-        center=False
-    ).sum() * (1.0 / (window - 1.0))
-
-    k = 0.34 / (1.34 + ((window + 1) / (window - 1)) )
+    k = 0.34 / (1.34 + ((window + 1) / (window - 1)))
     result = (open_vol + k * close_vol + (1 - k) * window_rs).apply(np.sqrt) * np.sqrt(trading_periods)
 
-    if return_last_only:
-        return result.iloc[-1]
-    else:
-        return result.dropna()
+    return result.iloc[-1] if return_last_only else result.dropna()
 
 
 def build_term_structure(days, ivs):
     days = np.array(days)
     ivs = np.array(ivs)
-
     sort_idx = days.argsort()
     days = days[sort_idx]
     ivs = ivs[sort_idx]
-
     spline = interp1d(days, ivs, kind='linear', fill_value="extrapolate")
 
     def term_spline(dte):
@@ -133,7 +118,6 @@ def compute_recommendation(ticker):
         for exp_date, chain in options_chains.items():
             calls = chain.calls
             puts = chain.puts
-
             if calls.empty or puts.empty:
                 continue
 
@@ -154,7 +138,6 @@ def compute_recommendation(ticker):
             put_bid  = puts.loc[put_idx,  'bid']
             put_ask  = puts.loc[put_idx,  'ask']
 
-            # Only change vs legacy: treat NaN like "missing" AND allow lastPrice as the same legacy fallback
             def safe_mid(bid, ask, last):
                 if pd.notna(bid) and pd.notna(ask) and bid > 0 and ask > 0:
                     return (bid + ask) / 2.0
@@ -177,33 +160,27 @@ def compute_recommendation(ticker):
             return "Error: Could not determine ATM IV for any expiration dates."
 
         today = datetime.today().date()
-        dtes = []
-        ivs = []
+        dtes, ivs = [], []
         for exp_date, iv in atm_iv.items():
             exp_date_obj = datetime.strptime(exp_date, "%Y-%m-%d").date()
             days_to_expiry = (exp_date_obj - today).days
             dtes.append(days_to_expiry)
-            ivs.append(iv * 100.0)  # ✅ FIX: Convert implied vol from fraction to percentage (legacy behavior)
+            ivs.append(iv * 100.0)
 
         term_spline = build_term_structure(dtes, ivs)
-
-        ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45-dtes[0])
+        ts_slope_0_45 = (term_spline(45) - term_spline(dtes[0])) / (45 - dtes[0])
 
         price_history = stock.history(period='3mo')
         iv30_rv30 = term_spline(30) / yang_zhang(price_history)
-
         avg_volume = price_history['Volume'].rolling(30).mean().dropna().iloc[-1]
+        expected_move = str(round(straddle / underlying_price * 100, 2)) + "%" if straddle else None
 
-        expected_move = str(round(straddle / underlying_price * 100,2)) + "%" if straddle else None
-
-        # --- Added raw value dictionary ---
         raw_values = {
             'avg_volume_raw': avg_volume,
             'iv30_rv30_raw': iv30_rv30,
             'ts_slope_0_45_raw': ts_slope_0_45
         }
 
-        # Legacy return: booleans + expected_move + raw values
         return {
             'avg_volume': avg_volume >= 1500000,
             'iv30_rv30': iv30_rv30 >= 1.25,
@@ -211,20 +188,22 @@ def compute_recommendation(ticker):
             'expected_move': expected_move,
             **raw_values
         }
+
     except Exception:
-        # Keep legacy behavior: generic error on exception
         raise Exception('Error occured processing')
 
-
-# ---------------------------
-# Streamlit UI (thin shell)
-# ---------------------------
+# ==========================================================
+# Streamlit UI
+# ==========================================================
 st.set_page_config(page_title="Earnings Position Checker", page_icon="📈", layout="wide")
 st.title("📈 Earnings Position Checker (Streamlit)")
 
 ticker = st.text_input("Enter Stock Symbol:", "AAPL")
 run = st.button("Submit")
 
+# ---------------------------
+# Single ticker mode
+# ---------------------------
 if run:
     try:
         result = compute_recommendation(ticker)
@@ -236,7 +215,6 @@ if run:
             ts_slope_bool = result['ts_slope_0_45']
             expected_move = result['expected_move']
 
-            # Legacy decision logic
             if avg_volume_bool and iv30_rv30_bool and ts_slope_bool:
                 title = "Recommended"
                 title_color = "green"
@@ -253,14 +231,12 @@ if run:
             st.write(f"ts_slope_0_45: {'PASS' if ts_slope_bool else 'FAIL'}")
             st.write(f"Expected Move: {expected_move}")
 
-            # --- Added raw value printout ---
             st.markdown("---")
             st.subheader("Raw Values for Verification")
             st.write(f"Average Volume (Raw): {result.get('avg_volume_raw', 'N/A'):,}")
             st.write(f"IV30/RV30 (Raw): {result.get('iv30_rv30_raw', 'N/A'):.4f}")
             st.write(f"Term Structure Slope 0-45 (Raw): {result.get('ts_slope_0_45_raw', 'N/A'):.6f}")
 
-            # --- Criteria printout ---
             st.markdown("---")
             st.subheader("Selection Criteria")
             st.write("✅ avg_volume ≥ 1,500,000")
@@ -269,3 +245,58 @@ if run:
 
     except Exception as e:
         st.error(str(e))
+
+# ---------------------------
+# Screener Mode: Earnings Next 5 Days
+# ---------------------------
+st.markdown("---")
+st.subheader("📊 Screener: Earnings in Next 5 Days")
+
+if st.button("Run Screener"):
+    try:
+        today = datetime.now().date()
+        end_date = today + timedelta(days=5)
+        with st.spinner("Fetching upcoming earnings..."):
+            cal = yf.earnings_calendar(start=today.strftime('%Y-%m-%d'),
+                                       end=end_date.strftime('%Y-%m-%d'))
+            tickers = list(cal.index.unique())
+
+        st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
+
+        if len(tickers) == 0:
+            st.warning("No upcoming earnings found.")
+        else:
+            progress_bar = st.progress(0)
+            output = []
+            total = len(tickers)
+            done = 0
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(compute_recommendation, t): t for t in tickers}
+                for future in as_completed(futures):
+                    t = futures[future]
+                    try:
+                        res = future.result()
+                        if isinstance(res, dict):
+                            a, b, c = res['avg_volume'], res['iv30_rv30'], res['ts_slope_0_45']
+                            if a and b and c:
+                                output.append({
+                                    'Ticker': t,
+                                    'Avg Volume': f"{res['avg_volume_raw']:,}",
+                                    'IV30/RV30': f"{res['iv30_rv30_raw']:.4f}",
+                                    'TS Slope 0-45': f"{res['ts_slope_0_45_raw']:.6f}",
+                                    'Expected Move': res['expected_move']
+                                })
+                    except Exception:
+                        pass
+                    done += 1
+                    progress_bar.progress(int(done / total * 100))
+
+            if len(output) == 0:
+                st.warning("No stocks met all criteria.")
+            else:
+                st.success(f"{len(output)} stocks passed all criteria.")
+                st.dataframe(pd.DataFrame(output))
+
+    except Exception as e:
+        st.error(f"Error running screener: {e}")
