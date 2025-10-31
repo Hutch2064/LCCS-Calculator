@@ -275,10 +275,10 @@ st.subheader("Screener: Earnings in Next Trading Day")
 
 from pandas.tseries.offsets import BDay
 
-def get_upcoming_earnings(days_ahead=1):
+def get_upcoming_earnings(days_ahead=5):
     today = datetime.now().date()
     tickers = set()
-    for i in range(days_ahead + 1):
+    for i in range(days_ahead + 5):
         query_date = (today + BDay(i)).date()
         url = f"https://api.nasdaq.com/api/calendar/earnings?date={query_date.strftime('%Y-%m-%d')}"
         headers = {
@@ -360,6 +360,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
