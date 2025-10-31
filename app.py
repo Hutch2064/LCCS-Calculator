@@ -282,6 +282,53 @@ def get_upcoming_earnings(days_ahead=5):
             continue
 
     return sorted(list(tickers))
+# ----------------------------------------------------------
+# Run Screener button and progress output
+# ----------------------------------------------------------
+if st.button("Run Screener"):
+    try:
+        st.info("Fetching upcoming earnings tickers from Nasdaq...")
+        tickers = get_upcoming_earnings(5)
+        st.write(f"Found {len(tickers)} tickers with earnings in next 5 days.")
+
+        if len(tickers) == 0:
+            st.warning("No upcoming earnings found. Nasdaq data may refresh overnight (try again later).")
+        else:
+            progress_bar = st.progress(0)
+            results = []
+            total = len(tickers)
+            done = 0
+
+            # Parallel execution for speed
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(compute_recommendation, t): t for t in tickers}
+                for future in as_completed(futures):
+                    t = futures[future]
+                    try:
+                        res = future.result()
+                        if isinstance(res, dict):
+                            a, b, c = res['avg_volume'], res['iv30_rv30'], res['ts_slope_0_45']
+                            if a and b and c:
+                                results.append({
+                                    'Ticker': t,
+                                    'Average Volume (Raw)': f"{res['avg_volume_raw']:,}",
+                                    'IV30/RV30 (Raw)': f"{res['iv30_rv30_raw']:.4f}",
+                                    'Term Slope 0–45 (Raw)': f"{res['ts_slope_0_45_raw']:.6f}",
+                                    'Expected Move': res['expected_move']
+                                })
+                    except Exception:
+                        pass
+                    done += 1
+                    progress_bar.progress(min(int(done / total * 100), 100))
+
+            if len(results) == 0:
+                st.warning("No stocks met all criteria.")
+            else:
+                st.success(f"{len(results)} stocks passed all criteria.")
+                st.dataframe(pd.DataFrame(results))
+
+    except Exception as e:
+        st.error(f"Error running screener: {e}")
 
 
 
