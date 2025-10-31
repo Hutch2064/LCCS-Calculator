@@ -254,28 +254,34 @@ import requests
 st.markdown("---")
 st.subheader("📊 Screener: Earnings in Next 5 Days")
 
-def get_upcoming_earnings(days_ahead=5):
-    API_KEY = "TOZeLakxCgQ0lZn9hdqZ4wuy7aUpV86C"
-    url = f"https://financialmodelingprep.com/api/v3/earning_calendar?period=quarter&limit=500&apikey={API_KEY}"
-    try:
-        data = requests.get(url, timeout=10).json()
-        today = datetime.now().date()
-        end_date = today + timedelta(days=days_ahead)
+import requests
 
-        # Filter only those within the next few days
-        tickers = []
-        for d in data:
-            if "symbol" in d and "date" in d:
-                try:
-                    report_date = datetime.strptime(d["date"], "%Y-%m-%d").date()
-                    if today <= report_date <= end_date:
-                        tickers.append(d["symbol"])
-                except Exception:
-                    continue
-        return list(set(tickers))
-    except Exception as e:
-        st.warning(f"API error: {e}")
-        return []
+def get_upcoming_earnings(days_ahead=5):
+    today = datetime.now().date()
+    tickers = set()
+
+    # Nasdaq publishes one JSON per date (UTC). We'll fetch each day separately.
+    for i in range(days_ahead + 1):
+        query_date = today + timedelta(days=i)
+        url = f"https://api.nasdaq.com/api/calendar/earnings?date={query_date.strftime('%Y-%m-%d')}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "application/json, text/plain, */*",
+        }
+
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                rows = data.get("data", {}).get("rows", [])
+                for row in rows:
+                    symbol = row.get("symbol")
+                    if symbol:
+                        tickers.add(symbol.strip().upper())
+        except Exception:
+            continue
+
+    return sorted(list(tickers))
 
 
 
