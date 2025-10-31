@@ -306,7 +306,7 @@ if st.button("Run Screener"):
     try:
         st.info("Fetching stocks with upcoming earnings...")
         tickers = get_upcoming_earnings(5)
-        st.write(f"Found {len(tickers)} tickers with earnings in the next 5 trading day.")
+        st.write(f"Found {len(tickers)} stocks with earnings in the next 5 trading days.")
 
         if len(tickers) == 0:
             st.warning("No upcoming earnings found. Nasdaq data may refresh overnight (try again later).")
@@ -361,6 +361,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
