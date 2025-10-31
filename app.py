@@ -344,7 +344,7 @@ if st.button("Run Screener"):
                         pass
                     done += 1
                     progress_bar.progress(min(int(done / total * 100), 100))
-                    time.sleep(0.25)  # small delay to avoid throttling
+                    time.sleep(0.1)  # small delay to avoid throttling
 
             # Close Yahoo session cleanly again
             try:
@@ -361,6 +361,7 @@ if st.button("Run Screener"):
 
     except Exception as e:
         st.error(f"Error running screener: {e}")
+
 
 
 
